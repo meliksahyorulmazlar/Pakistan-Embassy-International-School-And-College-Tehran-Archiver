@@ -1,5 +1,6 @@
 import requests, lxml, re, time, os, random
 from bs4 import BeautifulSoup
+
 from bs4 import XMLParsedAsHTMLWarning
 import warnings
 
@@ -10,138 +11,66 @@ class WaybackArchive:
     def __init__(self):
         self.start_time = time.time()
         self.found_links = []
-        self.request_count = 0
-
         self.find()
         self.save_all()
 
-    # Check the execution time
+    # This method checks if it should start recording the last link
     def late_checker(self) -> bool:
         current_time = time.time() - self.start_time
         cutoff = (3 * 3600) + (55 * 60)
-        return current_time >= cutoff
+        return current_time - cutoff >= 0
 
-    # Retrieve and validate a website page
-    def fetch(self, url):
-        self.request_count += 1
-
-        print(f"\nRequest #{self.request_count}")
-        print(f"Fetching: {url}")
-
-        response = requests.get(url, timeout=30)
-
-        print(f"HTTP status: {response.status_code}")
-        print(f"Response size: {len(response.content)} bytes")
-
-        if response.status_code == 429:
-            print("\nRATE LIMIT EXCEEDED")
-            print("\nResponse headers:")
-
-            for key, value in response.headers.items():
-                print(f"{key}: {value}")
-
-            print("\nRetry-After:",
-                  response.headers.get("Retry-After"))
-
-            print("\nResponse body:")
-            print(response.text[:500])
-
-            raise RuntimeError(
-                "Crawling stopped due to server rate limit."
-            )
-
-        response.raise_for_status()
-
-        return str(BeautifulSoup(response.text, 'lxml'))
-
-    # Find all valid links
+    # This will find all the valid links to be archived on the wayback machine
     def find(self):
-        soup = self.fetch('https://peisctehran.com')
-
+        soup = BeautifulSoup(requests.get('https://peisctehran.com').text, 'lxml')
+        soup = str(soup)
         links = re.findall(r'"(.*?)"', soup)
-
-        links = [
-            link for link in links
-            if link.startswith('https://peisctehran')
-            and 'css' not in link
-            and 'js' not in link
-        ]
-
+        links = [link for link in links if link.startswith('https://peisctehran') and 'css' not in link and 'js' not in link]
         self.found_links.append('https://peisctehran.com/')
-        self.found_links.append('https://peisctehran.com')
+        self.found_links.append("https://peisctehran.com")
 
         while links:
-            print(f"Pending links: {len(links)}")
-            print(f"Discovered links: {len(self.found_links)}")
-
+            print(len(links))
             if links[0] not in self.found_links:
-
                 if 'wp-content' in links[0]:
+                    # These are photos,pdfs that have no links
                     self.found_links.append(links[0])
-
                 else:
-                    time.sleep(5)
-
-                    soup = self.fetch(links[0])
-
+                    # The link has not been explored-so it finds new links
+                    soup = BeautifulSoup(requests.get(links[0]).text, 'lxml')
+                    soup = str(soup)
                     new_links = re.findall(r'"(.*?)"', soup)
-
-                    new_links = [
-                        link for link in new_links
-                        if link.startswith('https://peisctehran')
-                        and 'css' not in link
-                        and 'js' not in link
-                    ]
-
+                    # filters out links that are css or js links
+                    new_links = [link for link in new_links if link.startswith('https://peisctehran') and 'css' not in link and 'js' not in link]
                     for new_link in new_links:
                         if new_link not in self.found_links:
                             if new_link not in links:
                                 print(new_link)
                                 links.append(new_link)
-
                     self.found_links.append(links[0])
-
+                    time.sleep(61)
             links.pop(0)
 
         random.shuffle(self.found_links)
+        print("done finding links")
 
-        print("\nDone finding links")
-        print(f"Total links found: {len(self.found_links)}")
-        print(f"Total discovery requests: {self.request_count}")
-
-    # Save all discovered links
+    # This method will save all the links on the wayback machine
     def save_all(self) -> None:
         for link in self.found_links:
-            if self.late_checker():
-                break
-
             print(f'saving {link}')
             self.save(link)
-
+            # the code stops working if it has passed 3 hours and 55 minutes
+            if self.late_checker():
+                break
             time.sleep(2)
 
-    # Submit a link to the Wayback Machine
+    # This method will save a given website link on the wayback machine
     def save(self, site: str) -> None:
         main = 'https://web.archive.org/save/'
-
         try:
-            response = requests.get(main + site, timeout=60)
-
-            print(f"Archive HTTP status: {response.status_code}")
-
-            if response.status_code == 429:
-                print("Wayback Machine rate limit exceeded.")
-                print("Retry-After:",
-                      response.headers.get("Retry-After"))
-
-                raise RuntimeError(
-                    "Archiving stopped due to rate limit."
-                )
-
-            response.raise_for_status()
-
-        except requests.exceptions.RequestException as error:
-            print(f"Archive request failed: {error}")
+            requests.get("https://web.archive.org/save/" + site)
+        except requests.exceptions.ConnectionError:
+            print('connection error')
 
 
 if __name__ == "__main__":
