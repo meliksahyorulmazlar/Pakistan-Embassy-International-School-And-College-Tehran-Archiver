@@ -11,7 +11,7 @@ class WaybackArchive:
     def __init__(self):
         self.start_time = time.time()
         self.found_links = []
-        self.find()
+        self.read()
         self.save_all()
 
     # This method checks if it should start recording the last link
