@@ -1,77 +1,16 @@
-import requests, lxml, re, time, os, random
-from bs4 import BeautifulSoup
+import requests
 
-from bs4 import XMLParsedAsHTMLWarning
-import warnings
+url = "https://peisctehran.com/index.php/gallery/"
 
-warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
+response = requests.get(url, timeout=30)
 
+print("HTTP status:", response.status_code)
 
-class WaybackArchive:
-    def __init__(self):
-        self.start_time = time.time()
-        self.found_links = []
-        self.find()
-        self.save_all()
+print("\nResponse headers:")
+for key, value in response.headers.items():
+    print(f"{key}: {value}")
 
-    # This method checks if it should start recording the last link
-    def late_checker(self) -> bool:
-        current_time = time.time() - self.start_time
-        cutoff = (3 * 3600) + (55 * 60)
-        return current_time - cutoff >= 0
-
-    # This will find all the valid links to be archived on the wayback machine
-    def find(self):
-        soup = BeautifulSoup(requests.get('https://peisctehran.com').text, 'lxml')
-        soup = str(soup)
-        links = re.findall(r'"(.*?)"', soup)
-        links = [link for link in links if link.startswith('https://peisctehran') and 'css' not in link and 'js' not in link]
-        self.found_links.append('https://peisctehran.com/')
-        self.found_links.append("https://peisctehran.com")
-
-        while links:
-            print(len(links))
-            if links[0] not in self.found_links:
-                if 'wp-content' in links[0]:
-                    # These are photos,pdfs that have no links
-                    self.found_links.append(links[0])
-                else:
-                    # The link has not been explored-so it finds new links
-                    soup = BeautifulSoup(requests.get(links[0]).text, 'lxml')
-                    soup = str(soup)
-                    new_links = re.findall(r'"(.*?)"', soup)
-                    # filters out links that are css or js links
-                    new_links = [link for link in new_links if link.startswith('https://peisctehran') and 'css' not in link and 'js' not in link]
-                    for new_link in new_links:
-                        if new_link not in self.found_links:
-                            if new_link not in links:
-                                print(new_link)
-                                links.append(new_link)
-                    self.found_links.append(links[0])
-                    time.sleep(5)
-            links.pop(0)
-
-        random.shuffle(self.found_links)
-        print("done finding links")
-
-    # This method will save all the links on the wayback machine
-    def save_all(self) -> None:
-        for link in self.found_links:
-            print(f'saving {link}')
-            self.save(link)
-            # the code stops working if it has passed 3 hours and 55 minutes
-            if self.late_checker():
-                break
-            time.sleep(2)
-
-    # This method will save a given website link on the wayback machine
-    def save(self, site: str) -> None:
-        main = 'https://web.archive.org/save/'
-        try:
-            requests.get("https://web.archive.org/save/" + site)
-        except requests.exceptions.ConnectionError:
-            print('connection error')
-
-
-if __name__ == "__main__":
-    wa = WaybackArchive()
+if response.status_code == 429:
+    print("\nRate limit exceeded.")
+    print("Retry-After:", response.headers.get("Retry-After"))
+    print(response.text)
