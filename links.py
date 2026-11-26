@@ -51,7 +51,7 @@ class WaybackArchive:
                     self.found_links.append(links[0])
                     count += 1
                     print(f"Links accessed: {count}")
-                  time.sleep(61)
+                    time.sleep(61)
             links.pop(0)
 
         random.shuffle(self.found_links)
