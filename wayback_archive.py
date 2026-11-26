@@ -1,8 +1,8 @@
-import requests
-import re
-import time
+import requests, lxml, re, time, os, random
+from bs4 import BeautifulSoup
+
+from bs4 import XMLParsedAsHTMLWarning
 import warnings
-from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
 
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
@@ -11,108 +11,66 @@ class WaybackArchive:
     def __init__(self):
         self.start_time = time.time()
         self.found_links = []
-        self.request_count = 0
-        self.failed_requests = []
-
         self.find()
+        self.save_all()
 
-    def fetch(self, url):
-        self.request_count += 1
+    # This method checks if it should start recording the last link
+    def late_checker(self) -> bool:
+        current_time = time.time() - self.start_time
+        cutoff = (3 * 3600) + (55 * 60)
+        return current_time - cutoff >= 0
 
-        print("\n" + "=" * 70)
-        print(f"Request #{self.request_count}")
-        print(f"URL: {url}")
-
-        start = time.time()
-
-        try:
-            response = requests.get(url, timeout=30)
-
-            print(f"HTTP status: {response.status_code}")
-            print(f"Final URL: {response.url}")
-            print(f"Response size: {len(response.content)} bytes")
-            print(f"Response time: {time.time() - start:.2f}s")
-            print(f"Content type: {response.headers.get('Content-Type')}")
-
-            soup = BeautifulSoup(response.text, "lxml")
-
-            print(f"Page title: {soup.title}")
-
-            if response.status_code != 200:
-                self.failed_requests.append(
-                    (url, response.status_code)
-                )
-                print(f"WARNING: {response.text[:300]}")
-
-            return str(soup)
-
-        except requests.exceptions.RequestException as error:
-            print(f"REQUEST FAILED: {error}")
-            self.failed_requests.append((url, str(error)))
-            return ""
-
-    def extract_links(self, soup):
-        links = re.findall(r'"(.*?)"', soup)
-
-        return [
-            link for link in links
-            if link.startswith("https://peisctehran")
-            and "css" not in link
-            and "js" not in link
-        ]
-
+    # This will find all the valid links to be archived on the wayback machine
     def find(self):
-        soup = self.fetch("https://peisctehran.com")
-        links = self.extract_links(soup)
-
-        self.found_links.append("https://peisctehran.com/")
+        soup = BeautifulSoup(requests.get('https://peisctehran.com').text, 'lxml')
+        soup = str(soup)
+        links = re.findall(r'"(.*?)"', soup)
+        links = [link for link in links if link.startswith('https://peisctehran') and 'css' not in link and 'js' not in link]
+        self.found_links.append('https://peisctehran.com/')
         self.found_links.append("https://peisctehran.com")
 
-        print(f"Initial queue size: {len(links)}")
-
         while links:
-            current_link = links[0]
-
-            print(f"\nPending links: {len(links)}")
-            print(f"Total discovered: {len(self.found_links)}")
-
-            if current_link not in self.found_links:
-
-                if "wp-content" in current_link:
-                    self.found_links.append(current_link)
-
+            print(len(links))
+            if links[0] not in self.found_links:
+                if 'wp-content' in links[0]:
+                    # These are photos,pdfs that have no links
+                    self.found_links.append(links[0])
                 else:
-                    soup = self.fetch(current_link)
-                    new_links = self.extract_links(soup)
-
-                    print(f"Extracted links: {len(new_links)}")
-                    print(f"Unique extracted links: {len(set(new_links))}")
-
-                    added = 0
-
+                    # The link has not been explored-so it finds new links
+                    soup = BeautifulSoup(requests.get(links[0]).text, 'lxml')
+                    soup = str(soup)
+                    new_links = re.findall(r'"(.*?)"', soup)
+                    # filters out links that are css or js links
+                    new_links = [link for link in new_links if link.startswith('https://peisctehran') and 'css' not in link and 'js' not in link]
                     for new_link in new_links:
                         if new_link not in self.found_links:
                             if new_link not in links:
+                                print(new_link)
                                 links.append(new_link)
-                                added += 1
-
-                    print(f"New links added to queue: {added}")
-
-                    self.found_links.append(current_link)
-
+                    self.found_links.append(links[0])
+                    time.sleep(5)
             links.pop(0)
 
-        print("\n" + "=" * 70)
-        print("CRAWLING SUMMARY")
-        print("=" * 70)
+        random.shuffle(self.found_links)
+        print("done finding links")
 
-        print(f"Total links discovered: {len(self.found_links)}")
-        print(f"HTTP requests made: {self.request_count}")
-        print(f"Failed requests: {len(self.failed_requests)}")
-        print(f"Execution time: {time.time() - self.start_time:.2f}s")
+    # This method will save all the links on the wayback machine
+    def save_all(self) -> None:
+        for link in self.found_links:
+            print(f'saving {link}')
+            self.save(link)
+            # the code stops working if it has passed 3 hours and 55 minutes
+            if self.late_checker():
+                break
+            time.sleep(2)
 
-        for url, error in self.failed_requests:
-            print(f"FAILED: {url} | {error}")
+    # This method will save a given website link on the wayback machine
+    def save(self, site: str) -> None:
+        main = 'https://web.archive.org/save/'
+        try:
+            requests.get("https://web.archive.org/save/" + site)
+        except requests.exceptions.ConnectionError:
+            print('connection error')
 
 
 if __name__ == "__main__":
