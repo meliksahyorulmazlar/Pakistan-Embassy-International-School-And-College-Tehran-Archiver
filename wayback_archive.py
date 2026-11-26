@@ -1,77 +1,42 @@
-import requests,lxml,re,time,os,random
+import requests
+import re
 from bs4 import BeautifulSoup
 
-from bs4 import XMLParsedAsHTMLWarning
-import warnings
-warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
+urls = [
+    "https://peisctehran.com/",
+    "https://peisctehran.com/index.php/courses/",
+    "https://peisctehran.com/index.php/news-events/",
+    "https://peisctehran.com/index.php/gallery/",
+    "https://peisctehran.com/index.php/about-our-school/",
+]
 
+for url in urls:
+    print("\n" + "=" * 70)
+    print(f"Requesting: {url}")
 
-class WaybackArchive:
-    def __init__(self):
-        self.start_time = time.time()
-        self.found_links = []
-        self.find()
-        self.save_all()
-        
+    try:
+        response = requests.get(url, timeout=30)
 
-    # This method checks if it should start recording the last link
-    def late_checker(self)->bool:
-        current_time = time.time()- self.start_time
-        cutoff =  (3*3600)+(55*60)
-        return current_time-cutoff >= 0
+        print(f"Status code: {response.status_code}")
+        print(f"Final URL: {response.url}")
+        print(f"Response size: {len(response.content)} bytes")
+        print(f"Content type: {response.headers.get('Content-Type')}")
 
-    # This will find all the valid links to be archived on the wayback machine
-    def find(self):
-        soup = BeautifulSoup(requests.get('https://peisctehran.com').text,'lxml')
-        soup = str(soup)
-        links = re.findall(r'"(.*?)"', soup)
-        links = [link for link in links if link.startswith('https://peisctehran')  and 'css' not in link and 'js' not in link ]
-        self.found_links.append('https://peisctehran.com/')
-        self.found_links.append("https://peisctehran.com")
+        soup = BeautifulSoup(response.text, "lxml")
 
-        while links:
-            print(len(links))
-            if links[0] not in self.found_links:
-                if 'wp-content' in links[0]:
-                    # These are photos,pdfs that have no links
-                    self.found_links.append(links[0])
-                else:
-                    # The link has not been explored-so it finds new links
-                    soup = BeautifulSoup(requests.get(links[0]).text, 'lxml')
-                    soup = str(soup)
-                    new_links = re.findall(r'"(.*?)"', soup)
-                    # filters out links that are css or js links
-                    new_links = [link for link in new_links if link.startswith('https://peisctehran') and 'css' not in link and 'js' not in link]
-                    for new_link in new_links:
-                        if new_link not in self.found_links:
-                            if new_link not in links:
-                                print(new_link)
-                                links.append(new_link)
-                    self.found_links.append(links[0])
-            links.pop(0)
+        print(f"Page title: {soup.title}")
 
-        random.shuffle(self.found_links)
-        print("done finding links")
+        links = re.findall(r'"(.*?)"', str(soup))
 
-    # This method will save all the links on the wayback machine
-    def save_all(self)->None:
-        for link in self.found_links:
-            print(f'saving {link}')
-            self.save(link)
-            # the code stops working if it has passed 3 hours and 55 minutes
-            if self.late_checker():
-                break
-            time.sleep(2)
+        links = [
+            link for link in links
+            if link.startswith("https://peisctehran")
+            and "css" not in link
+            and "js" not in link
+        ]
 
-    # This method will save a given website link on the wayback machine
-    def save(self, site: str) -> None:
-        main = 'https://web.archive.org/save/'
-        try:
-            requests.get("https://web.archive.org/save/" + site)
-        except requests.exceptions.ConnectionError:
-            print('connection error')
-            
+        print(f"Links found: {len(set(links))}")
+        print(f"Response preview: {response.text[:300]}")
 
-
-if __name__ == "__main__":
-    wa = WaybackArchive()
+    except requests.exceptions.RequestException as error:
+        print(f"Request failed: {error}")
