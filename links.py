@@ -59,10 +59,12 @@ class WaybackArchive:
 
     # This method will update the text file 
     def update_text(self):
-      def update_text(self):
-          for link in self.found_links:
-              with open("links.txt", "w") as file:
-                  file.write(link + "\n")
+        with open("links.txt", "w") as file:
+            for link in self.found_links:
+                file.write(link + "\n")
+    
+        print(f"Saved {len(self.found_links)} links")
+          
       
 
 
